@@ -1,3 +1,4 @@
+```cpp
 //
 // ゲームグラフィックス特論宿題アプリケーション
 //
@@ -128,11 +129,53 @@ int GgApp::main(int argc, const char* const* argv)
   // 正像のビュー変換行列を mv に求める
   const auto mv{ ggLookat(0.0f, 3.0f, 8.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f) };
 
+  // 鏡像のビュー変換行列（y=0 の平面で反転）
+  const GgMatrix reflection{ GgMatrix().scale(1.0f, -1.0f, 1.0f) };
+  const auto mv_mirror{ mv * reflection };
+
   // 視点座標系の光源位置を求める
   const auto normal{ mv * position };
 
+  // 鏡像用の光源位置（y=0 の平面で反転）
+  const auto mirror_light{ reflection * position };
+
   // 光源の材質
   const GgSimpleShader::LightBuffer light{ lightProperty };
+
+  // FBO の設定
+  GLuint fbo, color_texture, depth_texture;
+  const GLint width{ window.getWidth() }, height{ window.getHeight() };
+  
+  // カラーテクスチャの生成
+  glGenTextures(1, &color_texture);
+  glBindTexture(GL_TEXTURE_2D, color_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  
+  // デプステクスチャの生成
+  glGenTextures(1, &depth_texture);
+  glBindTexture(GL_TEXTURE_2D, depth_texture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  
+  // FBO の生成と設定
+  glGenFramebuffers(1, &fbo);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color_texture, 0);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depth_texture, 0);
+  
+  // FBO の状態を確認
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+  {
+    return -1; // エラー処理
+  }
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
   // 経過時間のリセット
   glfwSetTime(0.0);
@@ -146,7 +189,24 @@ int GgApp::main(int argc, const char* const* argv)
     // 投影変換行列
     const auto mp{ ggPerspective(0.5f, window.getAspect(), 1.0f, 15.0f) };
 
-    // 画面消去
+    // 1. FBO に鏡像をレンダリング
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    // 鏡像用の光源位置
+    light.loadPosition(mv * mirror_light);
+    
+    // 鏡像用のシェーダの選択
+    simple.use(mp, light);
+    
+    // 鏡像の描画（裏面カリングの向きを反転）
+    glFrontFace(GL_CW);
+    drawObjects(simple, mv_mirror, object.get(), material, objects, t);
+    glFrontFace(GL_CCW);
+    
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    
+    // 2. 通常のシーンをレンダリング
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // 正像用の光源の位置
@@ -160,8 +220,10 @@ int GgApp::main(int argc, const char* const* argv)
 
     // 床面用のシェーダの選択
     floor.use(light);
-
-    // 床面の描画
+    
+    // 床面の描画（FBO のテクスチャをバインド）
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, color_texture);
     floor.loadMatrix(mp, mv.rotateX(-1.5707963f));
     tile.select();
     rectangle->draw();
@@ -170,5 +232,11 @@ int GgApp::main(int argc, const char* const* argv)
     window.swapBuffers();
   }
 
+  // FBO とテクスチャの解放
+  glDeleteFramebuffers(1, &fbo);
+  glDeleteTextures(1, &color_texture);
+  glDeleteTextures(1, &depth_texture);
+
   return 0;
 }
+```
