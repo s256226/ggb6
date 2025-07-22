@@ -1,12 +1,7 @@
-//
-// ggsample13.cpp : FBOを用いた映り込み処理付き
-//
 #include "GgApp.h"
-
 #ifndef PROJECT_NAME
 #  define PROJECT_NAME "ggsample13"
 #endif
-
 #include "GgTileShader.h"
 
 constexpr auto cycle{ 10.0 };
@@ -39,11 +34,11 @@ const GgSimpleShader::Material tileMaterial
 const GgVector position{ 0.0f, 4.0f, 0.0f, 1.0f };
 const GgVector target{ 0.0f, 0.0f, 0.0f, 1.0f };
 
+// オブジェクト描画関数（変更なし）
 void drawObjects(const GgSimpleShader& shader, const GgMatrix& mv, const GgElements* object,
   const GgSimpleShader::MaterialBuffer& material, int count, float t)
 {
   material.select();
-
   for (int i = 1; i <= count; ++i)
   {
     const GLfloat h{ fmodf(36.0f * t, 2.0f) - 1.0f };
@@ -60,12 +55,12 @@ void drawObjects(const GgSimpleShader& shader, const GgMatrix& mv, const GgEleme
     };
 
     material.loadAmbientAndDiffuse(color);
-
     shader.loadModelviewMatrix(mv * ma);
     object->draw();
   }
 }
 
+// アプリケーション本体
 int GgApp::main(int argc, const char* const* argv)
 {
   Window window{ argc > 1 ? argv[1] : PROJECT_NAME };
@@ -86,37 +81,33 @@ int GgApp::main(int argc, const char* const* argv)
   const auto normal{ mv * position };
   const GgSimpleShader::LightBuffer light{ lightProperty };
 
-  // --- FBO 作成 ---
-  GLuint fbo, fboTexture, fboDepth;
+  // --- FBO 初期化 ---
+  GLuint fbo, fboTex, fboDepth;
   glGenFramebuffers(1, &fbo);
   glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
-  glGenTextures(1, &fboTexture);
-  glBindTexture(GL_TEXTURE_2D, fboTexture);
+  glGenTextures(1, &fboTex);
+  glBindTexture(GL_TEXTURE_2D, fboTex);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   glGenRenderbuffers(1, &fboDepth);
   glBindRenderbuffer(GL_RENDERBUFFER, fboDepth);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, 1024, 1024);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fboTexture, 0);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, 1024, 1024);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fboTex, 0);
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, fboDepth);
-
-  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    std::cerr << "FBO の作成に失敗しました" << std::endl;
-  }
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+  // --- メインループ ---
   glfwSetTime(0.0);
-
   while (window)
   {
-    const auto t{ static_cast<float>(fmod(glfwGetTime(), cycle) / cycle) };
+    const float t{ static_cast<float>(fmod(glfwGetTime(), cycle) / cycle) };
     const auto mp{ ggPerspective(0.5f, window.getAspect(), 1.0f, 15.0f) };
 
-    // --- 鏡像レンダリング ---
+    // 鏡像をFBOに描画
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, 1024, 1024);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -126,22 +117,22 @@ int GgApp::main(int argc, const char* const* argv)
     light.loadPosition(normalMirror);
     mirror.use(mp, light);
     drawObjects(mirror, mvMirror, object.get(), material, objects, t);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // --- 通常描画 ---
+    // メイン画面に戻す
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, window.getWidth(), window.getHeight());
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    // 正像描画
     light.loadPosition(normal);
     simple.use(mp, light);
     drawObjects(simple, mv, object.get(), material, objects, t);
 
-    // 床にFBOテクスチャを貼る
+    // 床描画（FBOのテクスチャを使う）
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fboTexture);
-
+    glBindTexture(GL_TEXTURE_2D, fboTex);
     floor.use(light);
-    glUniform1i(glGetUniformLocation(floor.get(), "reflection"), 0); // テクスチャユニット0
+    glUniform1i(glGetUniformLocation(floor.get(), "reflection"), 0);
     floor.loadMatrix(mp, mv.rotateX(-1.5707963f));
     tile.select();
     rectangle->draw();
