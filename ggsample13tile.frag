@@ -48,4 +48,3 @@ void main()
   // 市松模様と反射を合成（反射の寄与度を調整）
   fc = (iamb + idiff) * a + ispec + 0.5 * kspec * reflection;
 }
-```
