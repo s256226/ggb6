@@ -48,8 +48,8 @@ void main()
   ispec = pow(max(dot(n, h), 0.0), kshi) * kspec * lspec;
 
   // 頂点のスクリーン座標
-  gl_Position = pv * p;
+  gl_Position = mp * p;
   
   // カラーマップのテクスチャ座標
-  tc = nv;
+  tc = pv.xy;
 }
