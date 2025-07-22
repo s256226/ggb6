@@ -1,4 +1,3 @@
-```glsl
 #version 410 core
 
 // 市松模様の色
