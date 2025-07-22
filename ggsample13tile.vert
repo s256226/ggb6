@@ -1,4 +1,3 @@
-```glsl
 #version 410 core
 
 // 光源
