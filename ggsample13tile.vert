@@ -1,3 +1,4 @@
+```glsl
 #version 410 core
 
 // 光源
@@ -33,6 +34,7 @@ out vec4 iamb;                                        // 環境光の反射光�
 out vec4 idiff;                                       // 拡散反射光強度
 out vec4 ispec;                                       // 鏡面反射光強度
 out vec2 tc;                                          // カラーマップのテクスチャ座標
+out vec4 screen_pos;                                  // スクリーン座標
 
 void main()
 {
@@ -49,7 +51,9 @@ void main()
 
   // 頂点のスクリーン座標
   gl_Position = mp * p;
+  screen_pos = gl_Position;
   
   // カラーマップのテクスチャ座標
   tc = pv.xy;
 }
+```
