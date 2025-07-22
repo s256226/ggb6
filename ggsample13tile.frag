@@ -1,3 +1,4 @@
+```glsl
 #version 410 core
 
 // 市松模様の色
@@ -17,7 +18,7 @@ layout (std140) uniform Material
 };
 
 // テクスチャ座標のサンプラ
-uniform sampler2D color;                              // カラーマップ用
+uniform sampler2D color;                              // カラーマップ用（FBO のカラー）
 uniform sampler2DShadow depth;                        // デプスマップ用
 
 // シャドウマッピング用のデータ
@@ -29,6 +30,7 @@ in vec4 iamb;                                         // 環境光の反射光�
 in vec4 idiff;                                        // 拡散反射光強度
 in vec4 ispec;                                        // 鏡面反射光強度
 in vec2 tc;                                           // カラーマップのテクスチャ座標
+in vec4 screen_pos;                                   // スクリーン座標
 
 // フレームバッファに出力するデータ
 layout (location = 0) out vec4 fc;                    // フラグメントの色
@@ -37,8 +39,14 @@ void main()
 {
   // 市松模様
   vec4 a = mix(c1, c2, mod(floor(tc.x * 2.0) + floor(tc.y * 2.0), 2.0));
-  vec2 p = gl_FragCoord.xy / vp;
-  vec4 c = texture(color, p);
-
-  fc = (iamb + idiff) * a + ispec + kspec * c;
+  
+  // スクリーン座標を [0,1] に変換
+  vec2 p = (screen_pos.xy / screen_pos.w) * 0.5 + 0.5;
+  
+  // FBO のカラーテクスチャから反射色を取得
+  vec4 reflection = texture(color, p);
+  
+  // 市松模様と反射を合成（反射の寄与度を調整）
+  fc = (iamb + idiff) * a + ispec + 0.5 * kspec * reflection;
 }
+```
